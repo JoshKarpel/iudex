@@ -25,7 +25,8 @@ def test_source_in_msg_with_lambda(pre_and_post):
     with pytest.raises(iudex.exceptions.TestFailed) as excinfo:
         noop(-1)
 
-    assert 'lambda x: x > 0' in str(excinfo.value)
+    msg = str(excinfo.value)
+    assert 'lambda x: x > 0' in msg
 
 
 def test_source_in_msg_with_def(pre_and_post):
@@ -39,8 +40,9 @@ def test_source_in_msg_with_def(pre_and_post):
     with pytest.raises(iudex.exceptions.TestFailed) as excinfo:
         noop(-1)
 
-    assert 'def test(x):' in str(excinfo.value)
-    assert 'return x > 0' in str(excinfo.value)
+    msg = str(excinfo.value)
+    assert 'def test(x):' in msg
+    assert 'return x > 0' in msg
 
 
 def test_params_in_msg(pre_and_post):
@@ -51,7 +53,8 @@ def test_params_in_msg(pre_and_post):
     with pytest.raises(iudex.exceptions.TestFailed) as excinfo:
         noop(-1)
 
-    assert 'x = -1' in str(excinfo.value)
+    msg = str(excinfo.value)
+    assert 'x = -1' in msg
 
 
 def test_post_can_see_return_value():

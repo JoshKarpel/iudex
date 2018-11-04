@@ -1,10 +1,12 @@
+from typing import Callable, Tuple, Dict, Iterable
+
 import textwrap
 import inspect
 
 from . import exceptions
 
 
-def pre(test):
+def pre(test: Callable) -> Callable:
     def wrapper(func):
         if not isinstance(func, Judge):
             func = Judge(func)
@@ -16,7 +18,7 @@ def pre(test):
     return wrapper
 
 
-def post(test):
+def post(test: Callable) -> Callable:
     def wrapper(func):
         if not isinstance(func, Judge):
             func = Judge(func)
@@ -28,7 +30,7 @@ def post(test):
     return wrapper
 
 
-def invariant(test):
+def invariant(test: Callable) -> Callable:
     def wrapper(func):
         if not isinstance(func, Judge):
             func = Judge(func)
@@ -41,7 +43,7 @@ def invariant(test):
 
 
 class Judge:
-    def __init__(self, func):
+    def __init__(self, func: Callable):
         self.func = func
 
         self.signature = inspect.signature(func)
@@ -57,45 +59,12 @@ class Judge:
 
     def __call__(self, *args, **kwargs):
         self._run_pre_tests(args, kwargs)
-
-        invariants_before = {}
-        for inv in self.invariants:
-            sig = inspect.signature(inv)
-            vals = tuple(
-                kwargs.get(param, self.signature.parameters[param].default)
-                if param in kwargs
-                else args[self.positional_arg_indices_by_name[param]]
-                for param in sig.parameters
-            )
-            invariants_before[inv] = inv(*vals)
+        invariants_before = self._run_invariants_before(args, kwargs)
 
         rv = self.func(*args, **kwargs)
 
         self._run_post_tests(args, kwargs, rv)
-
-        for inv in self.invariants:
-            sig = inspect.signature(inv)
-            vals = []
-            for param in sig.parameters:
-                if param == 'rv':
-                    vals.append(rv)
-                elif param in kwargs:
-                    vals.append(kwargs.get(param, self.signature.parameters[param].default))
-                else:
-                    vals.append(args[self.positional_arg_indices_by_name[param]])
-            invariant_after = inv(*vals)
-            if invariants_before[inv] != invariant_after:
-                info = build_test_failed_msg(inv, self.signature, vals)
-                raise exceptions.InvariantViolated(
-                    '\n'.join((
-                        f'Invariant violated for function {self.func}!\n',
-                        info,
-                        '\nInvariant value before execution:',
-                        f'    {invariants_before[inv]}',
-                        '\nInvariant value after execution:',
-                        f'    {invariant_after}',
-                    ))
-                )
+        self._run_invariants_after(args, kwargs, rv, invariants_before)
 
         return rv
 
@@ -130,17 +99,59 @@ class Judge:
                 info = build_test_failed_msg(post_test, self.signature, vals)
                 raise exceptions.TestFailed(f'Post-execution test for function {self.func} failed!]\n\n{info}')
 
-    def _add_pre(self, test):
+    def _run_invariants_before(self, args, kwargs):
+        invariants_before = {}
+        for inv in self.invariants:
+            sig = inspect.signature(inv)
+            vals = tuple(
+                kwargs.get(param, self.signature.parameters[param].default)
+                if param in kwargs
+                else args[self.positional_arg_indices_by_name[param]]
+                for param in sig.parameters
+            )
+            invariants_before[inv] = inv(*vals)
+        return invariants_before
+
+    def _run_invariants_after(self, args, kwargs, return_value, invariants_before):
+        for inv in self.invariants:
+            sig = inspect.signature(inv)
+            vals = []
+            for param in sig.parameters:
+                if param == 'rv':
+                    vals.append(return_value)
+                elif param in kwargs:
+                    vals.append(kwargs.get(param, self.signature.parameters[param].default))
+                else:
+                    vals.append(args[self.positional_arg_indices_by_name[param]])
+            invariant_after = inv(*vals)
+            if invariants_before[inv] != invariant_after:
+                info = build_test_failed_msg(inv, self.signature, vals)
+                raise exceptions.InvariantViolated(
+                    '\n'.join((
+                        f'Invariant violated for function {self.func}!\n',
+                        info,
+                        '\nInvariant value before execution:',
+                        f'    {invariants_before[inv]}',
+                        '\nInvariant value after execution:',
+                        f'    {invariant_after}',
+                    ))
+                )
+
+    def _add_pre(self, test: Callable):
         self.pre_tests.append(test)
 
-    def _add_post(self, test):
+    def _add_post(self, test: Callable):
         self.post_tests.append(test)
 
-    def _add_invariant(self, test):
+    def _add_invariant(self, test: Callable):
         self.invariants.append(test)
 
 
-def build_test_failed_msg(test, signature, values):
+def build_test_failed_msg(
+    test: Callable,
+    signature: inspect.Signature,
+    values: Iterable,
+) -> str:
     file = inspect.getsourcefile(test)
     source, lineno = get_source_of_test(test)
 
@@ -157,14 +168,14 @@ def build_test_failed_msg(test, signature, values):
     return '\n'.join(msg_lines)
 
 
-def get_source_of_test(test):
+def get_source_of_test(test: Callable) -> Tuple[str, int]:
     raw, lineno = inspect.getsourcelines(test)
     if 'def' in raw[0]:
         return ''.join(raw), lineno
     return take_until_paren_balanced(''.join(raw)), lineno
 
 
-def take_until_paren_balanced(string):
+def take_until_paren_balanced(string: str) -> str:
     open_count = 0
     has_opened = False
     output = []
