@@ -3,11 +3,6 @@ import pytest
 import iudex
 
 
-@pytest.fixture(params = [iudex.pre, iudex.post])
-def pre_and_post(request):
-    return request.param
-
-
 def test_pre_raises_if_fail(pre_and_post):
     @pre_and_post(lambda x: x > 0)
     def noop(x):
@@ -64,3 +59,11 @@ def test_post_can_see_return_value():
 
     with pytest.raises(iudex.exceptions.TestFailed):
         zero()
+
+
+def test_return_value_is_returned_on_success(pre_and_post):
+    @pre_and_post(lambda x: True)
+    def noop(x):
+        return x
+
+    assert noop(1) == 1

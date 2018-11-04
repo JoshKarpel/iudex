@@ -23,3 +23,11 @@ def test_invariant_violated_msg_has_old_and_new_in_it():
     msg = str(excinfo.value)
     assert '0' in msg
     assert '1' in msg
+
+
+def test_return_value_is_returned_on_success():
+    @iudex.invariant(lambda x: True)
+    def noop(x):
+        return x
+
+    assert noop(1) == 1
